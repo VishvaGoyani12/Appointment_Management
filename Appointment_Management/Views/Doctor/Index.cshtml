@@ -1,0 +1,67 @@
+﻿@{
+    ViewData["Title"] = "Doctors";
+}
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">Doctor Management</h2>
+            <small class="text-muted">View, filter, and manage doctor records</small>
+        </div>
+        <button class="btn btn-success" id="btnAdd">
+            <i class="bi bi-plus-lg me-1"></i> Add Doctor
+        </button>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light fw-semibold">
+            <i class="bi bi-funnel-fill me-2"></i>Filter Doctors
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="filterGender" class="form-label">Gender</label>
+                    <select id="filterGender" class="form-select">
+                        <option value="">All</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="filterStatus" class="form-label">Status</label>
+                    <select id="filterStatus" class="form-select">
+                        <option value="">All</option>
+                        <option value="true">Active</option>
+                        <option value="false">Deactive</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="filterSpecialistIn" class="form-label">Specialist In</label>
+                    <select id="filterSpecialistIn" class="form-select">
+                        <option value="">All</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <table id="doctorTable" class="table table-hover table-bordered w-100">
+            </table>
+        </div>
+    </div>
+
+    <div id="divModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div id="modalContent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/doctor.js"></script>
+}

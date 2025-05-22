@@ -1,0 +1,58 @@
+﻿@model Appointment_Management.Models.ViewModels.PatientViewModel
+@{
+    bool isAdminEdit = ViewData["IsAdminEdit"] != null && (bool)ViewData["IsAdminEdit"];
+}
+
+<div class="modal-header">
+    <h5 class="modal-title">@((Model == null || string.IsNullOrEmpty(Model.FullName)) ? "Add Patient" : "Edit Patient")</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body">
+    <form id="formCreateOrEdit">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Id" value="@Model.Id" />
+
+
+        <div class="form-group mb-3">
+            <label>Full Name</label>
+            <input asp-for="FullName" class="form-control" readonly="@(isAdminEdit ? "readonly" : null)" />
+        </div>
+
+        <div class="form-group mb-3">
+            <label>Gender</label>
+            <input asp-for="Gender" class="form-control" readonly="@(isAdminEdit ? "readonly" : null)" />
+        </div>
+
+        <div class="form-group mb-3">
+            <label>Join Date</label>
+            <input asp-for="JoinDate" type="date" class="form-control" readonly="@(isAdminEdit ? "readonly" : null)" />
+        </div>
+
+        <div class="form-group mb-3">
+            <label>Status</label>
+            @if (isAdminEdit)
+            {
+                <select asp-for="Status" class="form-select">
+                    <option value="true" selected="@(Model.Status ? "selected" : null)">Active</option>
+                    <option value="false" selected="@(!Model.Status ? "selected" : null)">Deactive</option>
+                </select>
+            }
+            else
+            {
+                <select asp-for="Status" class="form-select">
+                    <option value="true" selected="@(Model.Status ? "selected" : null)">Active</option>
+                    <option value="false" selected="@(!Model.Status ? "selected" : null)">Deactive</option>
+                </select>
+            }
+        </div>
+    </form>
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+    @if (isAdminEdit)
+    {
+        <button type="submit" form="formCreateOrEdit" class="btn btn-success">Save</button>
+    }
+</div>

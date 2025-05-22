@@ -1,0 +1,45 @@
+﻿@model Appointment_Management.Models.ViewModels.AppointmentViewModel
+
+<div class="modal-header">
+    <h5 class="modal-title">@((Model?.Id == 0) ? "Add Appointment" : "Edit Appointment")</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body">
+    <form id="formCreateOrEdit">
+        @Html.AntiForgeryToken()
+        <input asp-for="Id" type="hidden" />
+
+        <div class="form-group mb-3">
+            <label asp-for="DoctorId"></label>
+            <select asp-for="DoctorId" class="form-control">
+                <option value="">-- Select Doctor --</option>
+                @foreach (var doctor in ViewBag.Doctors as List<SelectListItem>)
+                {
+                    <option value="@doctor.Value">@doctor.Text</option>
+                }
+            </select>
+            <span asp-validation-for="DoctorId" class="text-danger"></span>
+        </div>
+
+        <div class="form-group mb-3">
+            <label asp-for="AppointmentDate"></label>
+            <input asp-for="AppointmentDate" class="form-control" type="date" />
+            <span asp-validation-for="AppointmentDate" class="text-danger"></span>
+        </div>
+
+        <div class="form-group mb-3">
+            <label asp-for="Description"></label>
+            <textarea asp-for="Description" class="form-control"></textarea>
+            <span asp-validation-for="Description" class="text-danger"></span>
+        </div>
+
+        <input asp-for="Status" type="hidden" value="Pending" />
+
+
+        <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+    </form>
+</div>

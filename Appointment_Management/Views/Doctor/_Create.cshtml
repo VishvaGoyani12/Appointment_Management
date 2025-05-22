@@ -1,0 +1,71 @@
+﻿@model Appointment_Management.Models.ViewModels.DoctorViewModel
+
+<div class="modal-header">
+    <h5 class="modal-title">@((Model?.ApplicationUserId == null) ? "Add Doctor" : "Edit Doctor")</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+@if (TempData["Errors"] != null)
+{
+    <div class="alert alert-danger" role="alert">
+        @Html.Raw(TempData["Errors"])
+    </div>
+}
+
+<div class="modal-body">
+    <form id="formCreateOrEdit" method="post">
+        @Html.AntiForgeryToken()
+
+        <input type="hidden" asp-for="ApplicationUserId" />
+
+        <div class="mb-3">
+            <label asp-for="FullName" class="form-label"></label>
+            <input asp-for="FullName" class="form-control" />
+            <span asp-validation-for="FullName" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Gender" class="form-label"></label>
+            <select asp-for="Gender" class="form-select">
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+            </select>
+            <span asp-validation-for="Gender" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Email" class="form-label"></label>
+            <input asp-for="Email" class="form-control" />
+            <span asp-validation-for="Email" class="text-danger"></span>
+        </div>
+
+        @if (string.IsNullOrEmpty(Model.ApplicationUserId))
+        {
+            <div class="mb-3">
+                <label asp-for="Password" class="form-label"></label>
+                <input asp-for="Password" class="form-control" type="password" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+            </div>
+        }
+
+        <div class="mb-3">
+            <label asp-for="SpecialistIn" class="form-label"></label>
+            <input asp-for="SpecialistIn" class="form-control" />
+            <span asp-validation-for="SpecialistIn" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Status" class="form-label"></label>
+            <select asp-for="Status" class="form-select">
+                <option value="true">Active</option>
+                <option value="false">Deactive</option>
+            </select>
+            <span asp-validation-for="Status" class="text-danger"></span>
+        </div>
+    </form>
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+    <button type="submit" form="formCreateOrEdit" class="btn btn-success">Save</button>
+</div>
