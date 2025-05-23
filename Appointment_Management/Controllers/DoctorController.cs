@@ -111,7 +111,6 @@ namespace Appointment_Management.Controllers
         [HttpPost]
         public async Task<IActionResult> Edit(DoctorViewModel model)
         {
-            // ✅ Only validate password on create
             if (string.IsNullOrEmpty(model.ApplicationUserId) && string.IsNullOrWhiteSpace(model.Password))
             {
                 ModelState.AddModelError(nameof(model.Password), "The Password field is required.");
@@ -124,7 +123,7 @@ namespace Appointment_Management.Controllers
                     .Select(e => e.ErrorMessage)
                     .ToList();
 
-                TempData["Errors"] = string.Join("<br/>", errors);
+                TempData["Error"] = string.Join("<br/>", errors);
                 return PartialView("_Create", model);
             }
 
@@ -145,7 +144,7 @@ namespace Appointment_Management.Controllers
             if (!updateUserResult.Succeeded)
             {
                 var errors = updateUserResult.Errors.Select(e => e.Description);
-                TempData["Errors"] = string.Join("<br/>", errors);
+                TempData["Error"] = string.Join("<br/>", errors);
                 return PartialView("_Create", model);
             }
 
@@ -156,7 +155,7 @@ namespace Appointment_Management.Controllers
                 if (!passwordResult.Succeeded)
                 {
                     var errors = passwordResult.Errors.Select(e => e.Description);
-                    TempData["Errors"] = string.Join("<br/>", errors);
+                    TempData["Error"] = string.Join("<br/>", errors);
                     return PartialView("_Create", model);
                 }
             }

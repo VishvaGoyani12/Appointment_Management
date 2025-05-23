@@ -75,11 +75,14 @@ namespace Appointment_Management.Controllers
 
             if (!string.IsNullOrEmpty(searchValue))
             {
+                string lowerSearchValue = searchValue.ToLower();
                 dataQuery = dataQuery.Where(a =>
-                    a.DoctorName.Contains(searchValue) ||
-                    a.Description.Contains(searchValue) ||
-                    a.Status.Contains(searchValue));
+                    a.PatientName.ToLower().Contains(lowerSearchValue) ||
+                    a.DoctorName.ToLower().Contains(lowerSearchValue) ||
+                    a.Description.ToLower().Contains(lowerSearchValue) ||
+                    a.Status.ToLower().Contains(lowerSearchValue));
             }
+
 
             int recordsTotal = await dataQuery.CountAsync();
 
@@ -139,35 +142,85 @@ namespace Appointment_Management.Controllers
 
             if (ModelState.IsValid)
             {
-                bool isDuplicate = await _context.Appointments.AnyAsync(a =>
-                    a.DoctorId == vm.DoctorId &&
+                if (vm.AppointmentDate < DateTime.Now)
+                {
+                    ModelState.AddModelError("AppointmentDate", "Appointment date cannot be in the past.");
+                }
+
+                var appointmentHour = vm.AppointmentDate.Hour;
+                if (appointmentHour < 9 || appointmentHour >= 17)
+                {
+                    ModelState.AddModelError("AppointmentDate", "Appointment must be within doctor's working hours (9 AM - 5 PM).");
+                }
+
+                var fifteenDaysAgo = vm.AppointmentDate.Date.AddDays(-5);
+
+                bool hasRecentSameDoctorAppointment = await _context.Appointments.AnyAsync(a =>
                     a.PatientId == patient.Id &&
+                    a.DoctorId == vm.DoctorId &&
+                    a.AppointmentDate.Date >= fifteenDaysAgo &&
+                    a.AppointmentDate.Date < vm.AppointmentDate.Date);
+
+                if (hasRecentSameDoctorAppointment)
+                {
+                    ModelState.AddModelError("DoctorId", "You cannot book with the same doctor again within 5 days.");
+                }
+
+                bool hasOtherDoctorSameDate = await _context.Appointments.AnyAsync(a =>
+                    a.PatientId == patient.Id &&
+                    a.AppointmentDate.Date == vm.AppointmentDate.Date &&
+                    a.DoctorId != vm.DoctorId);
+
+                if (hasOtherDoctorSameDate)
+                {
+                    ModelState.AddModelError("AppointmentDate", "You already have an appointment with another doctor on this date.");
+                }
+
+                int maxAppointmentsPerDay = 10;
+                int doctorAppointmentsCount = await _context.Appointments.CountAsync(a =>
+                    a.DoctorId == vm.DoctorId &&
                     a.AppointmentDate.Date == vm.AppointmentDate.Date);
 
-                if (isDuplicate)
+                if (doctorAppointmentsCount >= maxAppointmentsPerDay)
                 {
-                    ModelState.AddModelError("AppointmentDate", "This appointment already exists for the selected doctor on the same date.");
+                    ModelState.AddModelError("DoctorId", "The doctor is fully booked for this date.");
                 }
-                else
-                {
-                    var appointment = new Appointment
-                    {
-                        PatientId = patient.Id,
-                        DoctorId = vm.DoctorId,
-                        AppointmentDate = vm.AppointmentDate,
-                        Description = vm.Description,
-                        Status = "Pending" // 👈 Force status here
-                    };
 
-                    _context.Appointments.Add(appointment);
-                    await _context.SaveChangesAsync();
-                    return Json(new { success = true });
+                bool hasOverlappingAppointment = await _context.Appointments.AnyAsync(a =>
+                    a.PatientId == patient.Id &&
+                    a.DoctorId == vm.DoctorId &&
+                    a.AppointmentDate == vm.AppointmentDate);
+
+                if (hasOverlappingAppointment)
+                {
+                    ModelState.AddModelError("", "You already have an appointment with this doctor at the selected time.");
                 }
+
+                if (!ModelState.IsValid)
+                {
+                    PopulateDoctorDropdown(vm.AppointmentDate);
+                    return PartialView("_Create", vm);
+                }
+
+                var appointment = new Appointment
+                {
+                    PatientId = patient.Id,
+                    DoctorId = vm.DoctorId,
+                    AppointmentDate = vm.AppointmentDate,
+                    Description = vm.Description,
+                    Status = "Pending"
+                };
+
+                _context.Appointments.Add(appointment);
+                await _context.SaveChangesAsync();
+                return Json(new { success = true });
             }
 
-            PopulateDoctorDropdown();
+            PopulateDoctorDropdown(vm.AppointmentDate);
             return PartialView("_Create", vm);
         }
+
+
 
 
         [HttpGet]

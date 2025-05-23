@@ -3,6 +3,8 @@
     ViewData["Title"] = "Login";
 }
 
+@await Html.PartialAsync("_ToastNotifications")
+
 <div class="container mt-5">
     <div class="row justify-content-center">
         <div class="col-md-6 col-lg-5">
@@ -11,14 +13,7 @@
                     <h4 class="mb-0">Sign In</h4>
                 </div>
                 <div class="card-body">
-                    @if (TempData["SuccessMessage"] != null)
-                    {
-                        <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            @TempData["SuccessMessage"]
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    }
-
+                   
                     <form asp-action="Login" method="post" novalidate>
                         @Html.AntiForgeryToken()
 
@@ -58,18 +53,4 @@
         </div>
     </div>
 </div>
-@section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
-        @if (TempData["ErrorMessage"] != null)
-        {
-                <text>
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Access Denied',
-                        text: '@TempData["ErrorMessage"]'
-                    });
-                </text>
-        }
-    </script>
-}
+

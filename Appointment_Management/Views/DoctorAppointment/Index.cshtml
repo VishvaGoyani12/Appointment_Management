@@ -1,5 +1,5 @@
 ﻿@{
-    ViewData["Title"] = "Appointments";
+    ViewData["Title"] = "My Appointments";
 }
 @await Html.PartialAsync("_ToastNotifications")
 
@@ -8,10 +8,7 @@
         <div>
             <h2 class="mb-1">Appointment Management</h2>
             <small class="text-muted">View, filter, and manage appointment records</small>
-        </div>
-        <button class="btn btn-success" id="btnAdd">
-            <i class="bi bi-plus-lg me-1"></i> Add Appointment
-        </button>
+        </div>    
     </div>
 
     <div class="card shadow-sm mb-4">
@@ -32,33 +29,24 @@
             </div>
         </div>
     </div>
-
     <div class="card shadow-sm">
         <div class="card-body">
-            <table id="appointmentTable" class="table table-hover table-bordered w-100">
+            <div id="statusMessage" class="alert d-none" role="alert"></div>
+            <table id="doctorAppointmentsTable" class="table table-bordered table-hover w-100">
                 <thead>
                     <tr>
-                        <th>Id</th>
                         <th>Patient</th>
-                        <th>Doctor</th>
                         <th>Date</th>
                         <th>Description</th>
                         <th>Status</th>
+                        <th>Update Status</th>
                     </tr>
                 </thead>
             </table>
         </div>
     </div>
-
-    <div id="divModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content">
-                <div id="modalContent"></div>
-            </div>
-        </div>
-    </div>
 </div>
 
 @section Scripts {
-    <script src="~/js/appointment.js"></script>
+    <script src="~/js/doctorAppointments.js"></script>
 }

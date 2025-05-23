@@ -1,0 +1,16 @@
+﻿@model Appointment_Management.Models.Appointment
+
+<form id="editAppointmentForm" asp-action="UpdateStatus" asp-controller="DoctorAppointment" method="post">
+    <input type="hidden" asp-for="Id" />
+
+    <div class="form-group">
+        <label asp-for="Status"></label>
+        <select asp-for="Status" class="form-control">
+            <option value="Pending">Pending</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Cancelled">Cancelled</option>
+        </select>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Update</button>
+</form>

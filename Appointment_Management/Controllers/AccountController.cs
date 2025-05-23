@@ -52,7 +52,6 @@ namespace Appointment_Management.Controllers
                 {
                     await _userManager.AddToRoleAsync(user, "Patient");
 
-                    // ✅ Create linked Patient record
                     var patient = new Patient
                     {
                         ApplicationUserId = user.Id,
@@ -60,7 +59,7 @@ namespace Appointment_Management.Controllers
                         Status = true
                     };
 
-                    _context.Patients.Add(patient); // _context = ApplicationDbContext
+                    _context.Patients.Add(patient); 
                     await _context.SaveChangesAsync();
 
                     var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
@@ -100,7 +99,7 @@ namespace Appointment_Management.Controllers
             var result = await _userManager.ConfirmEmailAsync(user, token);
             if (result.Succeeded)
             {
-                TempData["SuccessMessage"] = "Your email has been confirmed. You can now log in.";
+                TempData["Success"] = "Your email has been confirmed. You can now log in.";
                 return RedirectToAction("Login", "Account");
             }
 
@@ -135,14 +134,14 @@ namespace Appointment_Management.Controllers
             var patient = await _context.Patients.FirstOrDefaultAsync(p => p.ApplicationUserId == user.Id);
             if (patient != null && !patient.Status)
             {
-                TempData["ErrorMessage"] = "You are not eligible to login. Please contact the administrator.";
+                TempData["Error"] = "You are not eligible to login. Please contact the administrator.";
                 return View(model);
             }
 
             var doctor = await _context.Doctors.FirstOrDefaultAsync(d => d.ApplicationUserId == user.Id);
             if (doctor != null && !doctor.Status)
             {
-                TempData["ErrorMessage"] = "You are not eligible to login. Please contact the administrator.";
+                TempData["Error"] = "You are not eligible to login. Please contact the administrator.";
                 return View(model);
             }
 
@@ -152,10 +151,13 @@ namespace Appointment_Management.Controllers
                 var roles = await _userManager.GetRolesAsync(user);
 
                 if (roles.Contains("Admin"))
-                    return RedirectToAction("Index", "Doctor");
+                    return RedirectToAction("Index", "Patient");
 
                 if (roles.Contains("Patient"))
                     return RedirectToAction("Index", "Appointment");
+
+                if (roles.Contains("Doctor"))
+                    return RedirectToAction("Index", "DoctorAppointment");
 
                 return RedirectToAction("Index", "Home");
             }
@@ -239,7 +241,7 @@ namespace Appointment_Management.Controllers
             var result = await _userManager.ResetPasswordAsync(user, model.Token, model.Password);
             if (result.Succeeded)
             {
-                TempData["SuccessMessage"] = "Your password has been reset successfully. Please log in.";
+                TempData["Success"] = "Your password has been reset successfully. Please log in.";
                 return RedirectToAction("Login");
             }
 
@@ -285,7 +287,6 @@ namespace Appointment_Management.Controllers
                 return RedirectToAction("Profile");
             }
 
-            // 👇 Add this line to show error in toast
             TempData["Error"] = "Failed to update profile. Please check the errors.";
 
             foreach (var error in result.Errors)
@@ -315,9 +316,11 @@ namespace Appointment_Management.Controllers
             if (result.Succeeded)
             {
                 await _signInManager.RefreshSignInAsync(user);
-                TempData["SuccessMessage"] = "Password changed successfully.";
+                TempData["Success"] = "Password changed successfully!";
                 return RedirectToAction("ChangePassword");
             }
+
+            TempData["Error"] = "Password change failed. See below for details.";
 
             foreach (var error in result.Errors)
             {
@@ -326,6 +329,7 @@ namespace Appointment_Management.Controllers
 
             return View(model);
         }
+
 
 
         [HttpGet]
@@ -360,7 +364,7 @@ namespace Appointment_Management.Controllers
             await _emailSender.SendEmailAsync(model.Email, "Confirm your email",
                 $"Please confirm your account by <a href='{confirmationLink}'>clicking here</a>.");
 
-            TempData["SuccessMessage"] = "Confirmation email has been resent. Please check your inbox.";
+            TempData["Success"] = "Confirmation email has been resent. Please check your inbox.";
             return RedirectToAction("Login");
         }
 
