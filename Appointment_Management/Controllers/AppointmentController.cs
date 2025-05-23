@@ -142,6 +142,10 @@ namespace Appointment_Management.Controllers
 
             if (ModelState.IsValid)
             {
+                if (vm.AppointmentDate.DayOfWeek == DayOfWeek.Sunday)
+                {
+                    ModelState.AddModelError("AppointmentDate", "Appointments cannot be booked on Sundays.");
+                }
                 if (vm.AppointmentDate < DateTime.Now)
                 {
                     ModelState.AddModelError("AppointmentDate", "Appointment date cannot be in the past.");

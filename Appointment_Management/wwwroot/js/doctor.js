@@ -64,7 +64,6 @@ $(document).on('submit', '#formCreateOrEdit', function (e) {
                     toastr.error(res.message || "An error occurred while saving the doctor.");
                 }
             } else {
-                // Load returned partial view (e.g., with validation errors)
                 $('#modalContent').html(res);
             }
         },

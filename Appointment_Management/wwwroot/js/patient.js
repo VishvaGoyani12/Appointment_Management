@@ -9,9 +9,6 @@ $("#divModal").on("hidden.bs.modal", function () {
 $(document).ready(function () {
     loadData();
 
-    // Removed Add button click handler as admin cannot add patients
-    // Removed filterJoinDate input event since it is optional, but keep if you want
-
     $('#filterGender, #filterStatus').change(function () {
         $('#patientTable').DataTable().ajax.reload();
     });
@@ -29,13 +26,11 @@ function openPatientModal(url) {
 }
 
 function prepareModalFields() {
-    // Make all inputs and selects readonly/disabled except the Status field
     $("#modalContent input, #modalContent select").each(function () {
         var name = $(this).attr("name");
         if (name === "Status") {
             $(this).prop("disabled", false);
         } else {
-            // For inputs, make readonly; for selects, disable
             if ($(this).is("input")) {
                 $(this).prop("readonly", true);
             } else if ($(this).is("select")) {
@@ -43,9 +38,6 @@ function prepareModalFields() {
             }
         }
     });
-
-    // Show Save button only (modal footer) if editing (disable for add if needed)
-    // We assume admin only edits, so always show save.
     $(".modal-footer button[type=submit]").show();
 }
 
@@ -60,7 +52,6 @@ $(document).on('submit', '#formCreateOrEdit', function (e) {
     var patientId = form.find('input[name="Id"]').val();
     var isEdit = patientId && !isNaN(parseInt(patientId)) && parseInt(patientId) > 0;
 
-    // Only allow POST to Edit endpoint since admin cannot create
     if (!isEdit) {
         alert("You are not authorized to add patients.");
         return;
@@ -77,7 +68,7 @@ $(document).on('submit', '#formCreateOrEdit', function (e) {
                 loadData();
             } else {
                 $('#modalContent').html(res);
-                prepareModalFields(); // reapply readonly/disable after partial reload
+                prepareModalFields(); 
             }
         },
         error: function (xhr) {
@@ -95,7 +86,6 @@ function editPatient(id) {
     openPatientModal(`/Patient/Edit/${id}`);
 }
 
-// Remove deletePatient function and buttons from table since admin cannot delete
 
 function loadData() {
     $('#patientTable').DataTable({
@@ -119,7 +109,6 @@ function loadData() {
             {
                 data: 'id', title: 'Actions',
                 render: function (data) {
-                    // Only Edit button, no Delete or Add
                     return `<button onclick="editPatient(${data})" class="btn btn-sm btn-warning">Edit Status</button>`;
                 }
             }

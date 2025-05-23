@@ -276,7 +276,6 @@ namespace Appointment_Management.Controllers
                 return Json(new { success = false, message = "Doctor cannot be deleted because they have appointments booked." });
             }
 
-            // Delete ApplicationUser and Doctor entry
             var user = await _userManager.FindByIdAsync(id);
             if (user != null)
             {

@@ -35,7 +35,6 @@ namespace Appointment_Management.Controllers
             var status = Request.Form["status"].ToString();
             var joinDate = Request.Form["joinDate"].ToString();
 
-            // Include ApplicationUser to access Name, Gender
             var query = _context.Patients.Include(p => p.ApplicationUser).AsQueryable();
 
             // Search
@@ -64,7 +63,6 @@ namespace Appointment_Management.Controllers
             // Sorting
             if (!string.IsNullOrEmpty(sortColumn) && !string.IsNullOrEmpty(sortDir))
             {
-                // For sorting on FullName or Gender, adjust property name with ApplicationUser
                 if (sortColumn == "name")
                     sortColumn = "ApplicationUser.FullName";
                 else if (sortColumn == "gender")
@@ -73,7 +71,7 @@ namespace Appointment_Management.Controllers
                 query = query.OrderBy($"{sortColumn} {sortDir}");
             }
 
-            // Paging and projection
+            // Paging 
             var data = query.Skip(start).Take(length)
                 .Select(p => new
                 {
@@ -112,8 +110,6 @@ namespace Appointment_Management.Controllers
                 Status = patient.Status
             };
 
-
-            // Pass a ViewData flag to indicate admin edit mode (only Status editable)
             ViewData["IsAdminEdit"] = true;
 
             return PartialView("_Create", viewModel);
@@ -132,7 +128,6 @@ namespace Appointment_Management.Controllers
 
                 if (patient == null) return NotFound();
 
-                // Only update Status for admin edit scenario
                 patient.Status = model.Status;
 
                 _context.Patients.Update(patient);
@@ -140,7 +135,6 @@ namespace Appointment_Management.Controllers
                 return Json(new { success = true });
             }
 
-            // Return partial view with admin edit flag again
             ViewData["IsAdminEdit"] = true;
             return PartialView("_Create", model);
         }

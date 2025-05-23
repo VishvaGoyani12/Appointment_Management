@@ -78,5 +78,5 @@ function showStatusMessage(message, type) {
 
     setTimeout(() => {
         $('#statusMessage').addClass('d-none').removeClass(`alert-${type}`);
-    }, 3000); // Hide after 3 seconds
+    }, 3000); 
 }
