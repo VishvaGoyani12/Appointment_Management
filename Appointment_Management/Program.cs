@@ -1,4 +1,5 @@
 using Appointment_Management.Data;
+using Appointment_Management.Data.Seed;
 using Appointment_Management.Helper;
 using Appointment_Management.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -52,63 +53,6 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.AccessDeniedPath = "/Account/AccessDenied";
 });
 
-//var jwtSettings = builder.Configuration.GetSection("Jwt");
-//var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]);
-
-//builder.Services.AddAuthentication(options =>
-//{
-//    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-//    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-//})
-//.AddJwtBearer(options =>
-//{
-//    options.TokenValidationParameters = new TokenValidationParameters
-//    {
-//        ValidateIssuer = true,
-//        ValidateAudience = true,
-//        ValidateLifetime = true,
-//        ValidateIssuerSigningKey = true,
-//        ValidIssuer = jwtSettings["Issuer"],
-//        ValidAudience = jwtSettings["Audience"],
-//        IssuerSigningKey = new SymmetricSecurityKey(key)
-//    };
-//});
-
-//swagger
-
-//builder.Services.AddEndpointsApiExplorer();
-//builder.Services.AddSwaggerGen(options =>
-//{
-//    options.SwaggerDoc("v1", new() { Title = "Appointment API", Version = "v1" });
-
-//    // Add JWT bearer support in Swagger
-//    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-//    {
-//        Name = "Authorization",
-//        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-//        Scheme = "Bearer",
-//        BearerFormat = "JWT",
-//        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-//        Description = "Enter 'Bearer' [space] and then your valid token.\r\nExample: \"Bearer abcdef12345\""
-//    });
-
-//    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-//    {
-//        {
-//            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-//            {
-//                Reference = new Microsoft.OpenApi.Models.OpenApiReference
-//                {
-//                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-//                    Id = "Bearer"
-//                }
-//            },
-//            Array.Empty<string>()
-//        }
-//    });
-//});
-
-
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
@@ -118,13 +62,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlSer
 
 var app = builder.Build();
 
-
-//app.UseSwagger();
-//app.UseSwaggerUI(c =>
-//{
-//    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Appointment API v1");
-//});
-
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    await DbSeeder.SeedRolesAndAdminAsync(services);
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

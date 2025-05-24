@@ -453,8 +453,6 @@ namespace Appointment_Management.Controllers
 
 
 
-
-
         [HttpPost]
         public async Task<IActionResult> Logout()
         {
@@ -466,54 +464,7 @@ namespace Appointment_Management.Controllers
         {
             return View();
         }
-
-        //    [HttpPost]
-        //    [Route("api/token")]
-        //    [AllowAnonymous]
-        //    public async Task<IActionResult> GenerateToken([FromBody] LoginViewModel model)
-        //    {
-        //        if (!ModelState.IsValid)
-        //            return BadRequest(ModelState);
-
-        //        var user = await _userManager.FindByEmailAsync(model.Email);
-        //        if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
-        //            return Unauthorized();
-
-        //        if (!await _userManager.IsEmailConfirmedAsync(user))
-        //            return Unauthorized("Email not confirmed");
-
-        //        var roles = await _userManager.GetRolesAsync(user);
-
-        //        var claims = new List<Claim>
-        //{
-        //    new Claim(JwtRegisteredClaimNames.Sub, user.Email),
-        //    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-        //    new Claim(ClaimTypes.NameIdentifier, user.Id),
-        //    new Claim(ClaimTypes.Name, user.FullName ?? user.Email)
-        //};
-
-        //        foreach (var role in roles)
-        //        {
-        //            claims.Add(new Claim(ClaimTypes.Role, role));
-        //        }
-
-        //        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
-        //        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        //        var token = new JwtSecurityToken(
-        //            issuer: _configuration["Jwt:Issuer"],
-        //            audience: _configuration["Jwt:Audience"],
-        //            claims: claims,
-        //            expires: DateTime.UtcNow.AddHours(2),
-        //            signingCredentials: creds
-        //        );
-
-        //        return Ok(new
-        //        {
-        //            token = new JwtSecurityTokenHandler().WriteToken(token),
-        //            expiration = token.ValidTo
-        //        });
-        //    }
+        
 
     }
 }
