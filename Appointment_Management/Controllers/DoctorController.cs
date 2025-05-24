@@ -111,9 +111,11 @@ namespace Appointment_Management.Controllers
         [HttpPost]
         public async Task<IActionResult> Edit(DoctorViewModel model)
         {
-            if (string.IsNullOrEmpty(model.ApplicationUserId) && string.IsNullOrWhiteSpace(model.Password))
+            if (!string.IsNullOrEmpty(model.ApplicationUserId))
             {
-                ModelState.AddModelError(nameof(model.Password), "The Password field is required.");
+                ModelState.Remove(nameof(model.Password));
+                ModelState.Remove(nameof(model.ConfirmPassword));
+                ModelState.Remove(nameof(model.Email));
             }
 
             if (!ModelState.IsValid)
@@ -137,8 +139,6 @@ namespace Appointment_Management.Controllers
             var user = doctor.ApplicationUser!;
             user.FullName = model.FullName;
             user.Gender = model.Gender;
-            user.Email = model.Email;
-            user.UserName = model.Email;
 
             var updateUserResult = await _userManager.UpdateAsync(user);
             if (!updateUserResult.Succeeded)
@@ -172,6 +172,7 @@ namespace Appointment_Management.Controllers
 
 
 
+
         [HttpPost]
         public IActionResult GetAll()
         {
@@ -192,7 +193,6 @@ namespace Appointment_Management.Controllers
 
             var query = _context.Doctors.Include(d => d.ApplicationUser).AsQueryable();
 
-            // 🔥 Apply filters
             if (!string.IsNullOrEmpty(gender))
                 query = query.Where(d => d.ApplicationUser.Gender == gender);
 
@@ -202,7 +202,7 @@ namespace Appointment_Management.Controllers
             if (!string.IsNullOrEmpty(specialistIn))
                 query = query.Where(d => d.SpecialistIn == specialistIn);
 
-            // Search logic
+            // Search 
             if (!string.IsNullOrEmpty(searchValue))
             {
                 query = query.Where(d =>

@@ -1,10 +1,16 @@
 ﻿using Appointment_Management.Data;
 using Appointment_Management.Models;
 using Appointment_Management.Models.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Security.Claims;
+using System.Text;
 
 namespace Appointment_Management.Controllers
 {
@@ -14,13 +20,15 @@ namespace Appointment_Management.Controllers
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IEmailSender _emailSender;
         private readonly ApplicationDbContext _context;
+        private readonly IConfiguration _configuration;
 
-        public AccountController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, IEmailSender emailSender, ApplicationDbContext context)
+        public AccountController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, IEmailSender emailSender, ApplicationDbContext context, IConfiguration configuration)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _emailSender = emailSender;
             _context = context;
+            _configuration = configuration;
         }
 
         [HttpGet]
@@ -368,6 +376,84 @@ namespace Appointment_Management.Controllers
             return RedirectToAction("Login");
         }
 
+        [HttpGet]
+        public async Task<IActionResult> ChangeEmail()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+                return RedirectToAction("Login");
+
+            var model = new ChangeEmailViewModel
+            {
+                CurrentEmail = user.Email
+            };
+
+            return View(model);
+        }
+
+
+        [HttpPost]
+        public async Task<IActionResult> ChangeEmail(ChangeEmailViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return View(model);
+
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+                return RedirectToAction("Login");
+
+            if (model.NewEmail == user.Email)
+            {
+                ModelState.AddModelError("", "The new email must be different from the current one.");
+                return View(model);
+            }
+
+            var token = await _userManager.GenerateChangeEmailTokenAsync(user, model.NewEmail);
+
+            var callbackUrl = Url.Action("ConfirmEmailChange", "Account", new
+            {
+                userId = user.Id,
+                email = model.NewEmail,
+                token
+            }, protocol: Request.Scheme);
+
+
+            await _emailSender.SendEmailAsync(model.NewEmail, "Confirm your new email",
+                $"Please confirm your new email by <a href='{callbackUrl}'>clicking here</a>.");
+
+            TempData["Success"] = "Confirmation link sent to your new email. Please check your inbox.";
+            return RedirectToAction("Profile");
+        }
+
+
+        [HttpGet]
+        public async Task<IActionResult> ConfirmEmailChange(string userId, string email, string token)
+        {
+            if (userId == null || email == null || token == null)
+                return RedirectToAction("Index", "Home");
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return NotFound();
+
+            var result = await _userManager.ChangeEmailAsync(user, email, token);
+
+            if (result.Succeeded)
+            {
+                user.UserName = email;
+                await _userManager.UpdateAsync(user);
+
+                TempData["Success"] = "Your email has been changed successfully.";
+                return RedirectToAction("Login", "Account");
+            }
+
+            TempData["Error"] = "Email change failed.";
+            return RedirectToAction("Login", "Account");
+        }
+
+
+
+
 
         [HttpPost]
         public async Task<IActionResult> Logout()
@@ -375,5 +461,59 @@ namespace Appointment_Management.Controllers
             await _signInManager.SignOutAsync();
             return RedirectToAction("Index", "Home");
         }
+
+        public IActionResult AccessDenied()
+        {
+            return View();
+        }
+
+        //    [HttpPost]
+        //    [Route("api/token")]
+        //    [AllowAnonymous]
+        //    public async Task<IActionResult> GenerateToken([FromBody] LoginViewModel model)
+        //    {
+        //        if (!ModelState.IsValid)
+        //            return BadRequest(ModelState);
+
+        //        var user = await _userManager.FindByEmailAsync(model.Email);
+        //        if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
+        //            return Unauthorized();
+
+        //        if (!await _userManager.IsEmailConfirmedAsync(user))
+        //            return Unauthorized("Email not confirmed");
+
+        //        var roles = await _userManager.GetRolesAsync(user);
+
+        //        var claims = new List<Claim>
+        //{
+        //    new Claim(JwtRegisteredClaimNames.Sub, user.Email),
+        //    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        //    new Claim(ClaimTypes.NameIdentifier, user.Id),
+        //    new Claim(ClaimTypes.Name, user.FullName ?? user.Email)
+        //};
+
+        //        foreach (var role in roles)
+        //        {
+        //            claims.Add(new Claim(ClaimTypes.Role, role));
+        //        }
+
+        //        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
+        //        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        //        var token = new JwtSecurityToken(
+        //            issuer: _configuration["Jwt:Issuer"],
+        //            audience: _configuration["Jwt:Audience"],
+        //            claims: claims,
+        //            expires: DateTime.UtcNow.AddHours(2),
+        //            signingCredentials: creds
+        //        );
+
+        //        return Ok(new
+        //        {
+        //            token = new JwtSecurityTokenHandler().WriteToken(token),
+        //            expiration = token.ValidTo
+        //        });
+        //    }
+
     }
 }
