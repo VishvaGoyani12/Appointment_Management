@@ -78,10 +78,22 @@ namespace Appointment_Management.Controllers
                 var start = Request.Form["start"].FirstOrDefault();
                 var length = Request.Form["length"].FirstOrDefault();
                 var searchValue = Request.Form["search[value]"].FirstOrDefault();
+                var sortColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
+                var sortColumnDir = Request.Form["order[0][dir]"].FirstOrDefault();
                 var status = Request.Form["status"].FirstOrDefault();
 
                 int pageSize = length != null ? Convert.ToInt32(length) : 10;
                 int skip = start != null ? Convert.ToInt32(start) : 0;
+
+                string sortColumn = "AppointmentDate"; 
+                switch (sortColumnIndex)
+                {
+                    case "0": sortColumn = "Patient.ApplicationUser.FullName"; break;
+                    case "1": sortColumn = "Doctor.ApplicationUser.FullName"; break;
+                    case "2": sortColumn = "AppointmentDate"; break;
+                    case "3": sortColumn = "Description"; break;
+                    case "4": sortColumn = "Status"; break;
+                }
 
                 var query = _context.Appointments
                     .Include(a => a.Patient)
@@ -108,8 +120,16 @@ namespace Appointment_Management.Controllers
 
                 var totalRecords = await query.CountAsync();
 
+                if (!string.IsNullOrEmpty(sortColumn) && !string.IsNullOrEmpty(sortColumnDir))
+                {
+                    query = query.OrderBy($"{sortColumn} {sortColumnDir}");
+                }
+                else
+                {
+                    query = query.OrderByDescending(a => a.AppointmentDate);
+                }
+
                 var appointments = await query
-                    .OrderByDescending(a => a.AppointmentDate)
                     .Skip(skip)
                     .Take(pageSize)
                     .Select(a => new

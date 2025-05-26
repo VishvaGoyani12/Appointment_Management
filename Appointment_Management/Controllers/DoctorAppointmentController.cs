@@ -9,6 +9,8 @@ using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Linq.Dynamic.Core;
+
 
 namespace Appointment_Management.Controllers
 {
@@ -55,8 +57,12 @@ namespace Appointment_Management.Controllers
                 var draw = Request.Form["draw"].FirstOrDefault();
                 var start = Request.Form["start"].FirstOrDefault();
                 var length = Request.Form["length"].FirstOrDefault();
-                var status = Request.Form["status"].FirstOrDefault();
                 var searchValue = Request.Form["search[value]"].FirstOrDefault();
+
+                // Sorting
+                var sortColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
+                var sortColumnName = Request.Form[$"columns[{sortColumnIndex}][data]"].FirstOrDefault();
+                var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault(); 
 
                 int pageSize = length != null ? Convert.ToInt32(length) : 10;
                 int skip = start != null ? Convert.ToInt32(start) : 0;
@@ -66,11 +72,14 @@ namespace Appointment_Management.Controllers
                         .ThenInclude(p => p.ApplicationUser)
                     .Where(a => a.DoctorId == doctor.Id);
 
+                // Filter by status
+                var status = Request.Form["status"].FirstOrDefault();
                 if (!string.IsNullOrEmpty(status))
                 {
                     query = query.Where(a => a.Status == status);
                 }
 
+                // Global search
                 if (!string.IsNullOrEmpty(searchValue))
                 {
                     searchValue = searchValue.ToLower();
@@ -83,8 +92,35 @@ namespace Appointment_Management.Controllers
 
                 var totalRecords = await query.CountAsync();
 
+                if (!string.IsNullOrEmpty(sortColumnName) && !string.IsNullOrEmpty(sortDirection))
+                {
+                    switch (sortColumnName)
+                    {
+                        case "patientName":
+                            sortColumnName = "Patient.ApplicationUser.FullName";
+                            break;
+                        case "appointmentDate":
+                            sortColumnName = "AppointmentDate";
+                            break;
+                        case "description":
+                            sortColumnName = "Description";
+                            break;
+                        case "status":
+                            sortColumnName = "Status";
+                            break;
+                        default:
+                            sortColumnName = "AppointmentDate";
+                            break;
+                    }
+
+                    query = query.OrderBy($"{sortColumnName} {sortDirection}");
+                }
+                else
+                {
+                    query = query.OrderByDescending(a => a.AppointmentDate); 
+                }
+
                 var appointments = await query
-                    .OrderByDescending(a => a.AppointmentDate)
                     .Skip(skip)
                     .Take(pageSize)
                     .Select(a => new
@@ -115,6 +151,7 @@ namespace Appointment_Management.Controllers
                 });
             }
         }
+
 
 
         [HttpPost]
