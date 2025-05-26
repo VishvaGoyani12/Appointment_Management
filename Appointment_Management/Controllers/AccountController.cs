@@ -1,4 +1,5 @@
 ﻿using Appointment_Management.Data;
+using Appointment_Management.Helper;
 using Appointment_Management.Models;
 using Appointment_Management.Models.ViewModels;
 using Microsoft.AspNetCore.Authorization;
@@ -114,6 +115,38 @@ namespace Appointment_Management.Controllers
             return View("Error");
         }
 
+        private async Task<string> GenerateJwtToken(ApplicationUser user)
+        {
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var claims = new List<Claim>
+{
+    new Claim(JwtRegisteredClaimNames.Sub, user.Email),
+    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+    new Claim(ClaimTypes.NameIdentifier, user.Id),
+    new Claim(ClaimTypes.Email, user.Email), // Add this line
+    new Claim(ClaimTypes.Name, user.UserName)
+};
+
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+
+            var jwtSettings = _configuration.GetSection("JwtSettings");
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: jwtSettings["Issuer"],
+                audience: jwtSettings["Audience"],
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(1),
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
 
 
         [HttpGet]
@@ -132,7 +165,7 @@ namespace Appointment_Management.Controllers
                 return View(model);
             }
 
-            if (!await _userManager.IsEmailConfirmedAsync(user))
+            if (!user.EmailConfirmed)
             {
                 ModelState.AddModelError("", "You need to confirm your email before logging in.");
                 return View(model);
@@ -153,25 +186,35 @@ namespace Appointment_Management.Controllers
                 return View(model);
             }
 
-            var result = await _signInManager.PasswordSignInAsync(user.UserName, model.Password, model.RememberMe, lockoutOnFailure: false);
-            if (result.Succeeded)
+            var isPasswordValid = await _userManager.CheckPasswordAsync(user, model.Password);
+            if (!isPasswordValid)
             {
-                var roles = await _userManager.GetRolesAsync(user);
-
-                if (roles.Contains("Admin"))
-                    return RedirectToAction("Index", "Patient");
-
-                if (roles.Contains("Patient"))
-                    return RedirectToAction("Index", "Appointment");
-
-                if (roles.Contains("Doctor"))
-                    return RedirectToAction("Index", "DoctorAppointment");
-
-                return RedirectToAction("Index", "Home");
+                ModelState.AddModelError("", "Invalid login attempt.");
+                return View(model);
             }
 
-            ModelState.AddModelError("", "Invalid login attempt.");
-            return View(model);
+            var token = await GenerateJwtToken(user);
+
+            Response.Cookies.Append("jwt_token", token, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                Expires = DateTime.UtcNow.AddHours(1),
+                SameSite = SameSiteMode.Strict
+            });
+
+            var roles = await _userManager.GetRolesAsync(user);
+            if (roles.Contains("Admin"))
+                return RedirectToAction("Index", "Patient");
+
+            if (roles.Contains("Patient"))
+                return RedirectToAction("Index", "Appointment");
+
+            if (roles.Contains("Doctor"))
+                return RedirectToAction("Index", "DoctorAppointment");
+
+            return RedirectToAction("Index", "Home");
+
         }
 
 
@@ -198,7 +241,7 @@ namespace Appointment_Management.Controllers
                 return View();
             }
 
-            if (!await _userManager.IsEmailConfirmedAsync(user))
+            if (!user.EmailConfirmed)
             {
                 ModelState.AddModelError("", "Email is not confirmed. Please confirm your email before resetting password.");
                 return View();
@@ -263,7 +306,8 @@ namespace Appointment_Management.Controllers
         [HttpGet]
         public async Task<IActionResult> Profile()
         {
-            var user = await _userManager.GetUserAsync(User);
+             var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+            var user = await _userManager.FindByIdAsync(jwtUser.UserId);
             if (user == null) return NotFound();
 
             var model = new UpdateProfileViewModel
@@ -275,12 +319,14 @@ namespace Appointment_Management.Controllers
             return View(model);
         }
 
+
         [HttpPost]
         public async Task<IActionResult> Profile(UpdateProfileViewModel model)
         {
             if (!ModelState.IsValid) return View(model);
 
-            var user = await _userManager.GetUserAsync(User);
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+            var user = await _userManager.FindByIdAsync(jwtUser.UserId);
             if (user == null) return NotFound();
 
             user.FullName = model.FullName;
@@ -296,7 +342,6 @@ namespace Appointment_Management.Controllers
             }
 
             TempData["Error"] = "Failed to update profile. Please check the errors.";
-
             foreach (var error in result.Errors)
                 ModelState.AddModelError("", error.Description);
 
@@ -315,7 +360,8 @@ namespace Appointment_Management.Controllers
             if (!ModelState.IsValid)
                 return View(model);
 
-            var user = await _userManager.GetUserAsync(User);
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+            var user = await _userManager.FindByIdAsync(jwtUser.UserId);
             if (user == null)
                 return RedirectToAction("Login", "Account");
 
@@ -328,12 +374,9 @@ namespace Appointment_Management.Controllers
                 return RedirectToAction("ChangePassword");
             }
 
-            TempData["Error"] = "Password change failed. See below for details.";
-
+            TempData["Error"] = "Failed to change password. Please check the errors.";
             foreach (var error in result.Errors)
-            {
-                ModelState.AddModelError(string.Empty, error.Description);
-            }
+                ModelState.AddModelError("", error.Description);
 
             return View(model);
         }
@@ -379,7 +422,11 @@ namespace Appointment_Management.Controllers
         [HttpGet]
         public async Task<IActionResult> ChangeEmail()
         {
-            var user = await _userManager.GetUserAsync(User);
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+            if (!jwtUser.IsAuthenticated)
+                return RedirectToAction("Login");
+
+            var user = await _userManager.FindByIdAsync(jwtUser.UserId);
             if (user == null)
                 return RedirectToAction("Login");
 
@@ -392,13 +439,18 @@ namespace Appointment_Management.Controllers
         }
 
 
+
         [HttpPost]
         public async Task<IActionResult> ChangeEmail(ChangeEmailViewModel model)
         {
             if (!ModelState.IsValid)
                 return View(model);
 
-            var user = await _userManager.GetUserAsync(User);
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+            if (!jwtUser.IsAuthenticated)
+                return RedirectToAction("Login");
+
+            var user = await _userManager.FindByIdAsync(jwtUser.UserId);
             if (user == null)
                 return RedirectToAction("Login");
 
@@ -416,7 +468,6 @@ namespace Appointment_Management.Controllers
                 email = model.NewEmail,
                 token
             }, protocol: Request.Scheme);
-
 
             await _emailSender.SendEmailAsync(model.NewEmail, "Confirm your new email",
                 $"Please confirm your new email by <a href='{callbackUrl}'>clicking here</a>.");
@@ -454,10 +505,10 @@ namespace Appointment_Management.Controllers
 
 
         [HttpPost]
-        public async Task<IActionResult> Logout()
+        public IActionResult Logout()
         {
-            await _signInManager.SignOutAsync();
-            return RedirectToAction("Index", "Home");
+            Response.Cookies.Delete("jwt_token");
+            return RedirectToAction("Login");
         }
 
         public IActionResult AccessDenied()

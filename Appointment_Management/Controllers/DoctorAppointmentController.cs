@@ -1,11 +1,14 @@
 ﻿using Appointment_Management.Data;
+using Appointment_Management.Helper;
 using Appointment_Management.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Threading.Tasks;
 using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace Appointment_Management.Controllers
 {
@@ -15,7 +18,8 @@ namespace Appointment_Management.Controllers
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
 
-        public DoctorAppointmentController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        public DoctorAppointmentController(ApplicationDbContext context,
+            UserManager<ApplicationUser> userManager)
         {
             _context = context;
             _userManager = userManager;
@@ -30,84 +34,131 @@ namespace Appointment_Management.Controllers
         [HttpPost]
         public async Task<IActionResult> GetMyAppointments()
         {
-            var user = await _userManager.GetUserAsync(User);
-            var doctor = await _context.Doctors
-                .Include(d => d.ApplicationUser)
-                .FirstOrDefaultAsync(d => d.ApplicationUserId == user.Id);
-
-            if (doctor == null)
+            try
             {
-                return Unauthorized();
-            }
+                var jwtUser = JwtHelper.GetJwtUser(HttpContext);
 
-            var draw = Request.Form["draw"].FirstOrDefault();
-            var start = Request.Form["start"].FirstOrDefault();
-            var length = Request.Form["length"].FirstOrDefault();
-            var status = Request.Form["status"].FirstOrDefault();
-
-            int pageSize = length != null ? Convert.ToInt32(length) : 0;
-            int skip = start != null ? Convert.ToInt32(start) : 0;
-
-            var query = _context.Appointments
-                .Include(a => a.Patient)
-                    .ThenInclude(p => p.ApplicationUser)
-                .Where(a => a.DoctorId == doctor.Id);
-
-            if (!string.IsNullOrEmpty(status))
-            {
-                query = query.Where(a => a.Status == status);
-            }
-
-            var totalRecords = await query.CountAsync();
-
-            var appointments = await query
-                .OrderByDescending(a => a.AppointmentDate)
-                .Skip(skip)
-                .Take(pageSize)
-                .Select(a => new
+                if (!jwtUser.IsAuthenticated || string.IsNullOrEmpty(jwtUser.Email))
                 {
-                    id = a.Id,
-                    patientName = a.Patient.ApplicationUser.FullName,
-                    appointmentDate = a.AppointmentDate.ToString("yyyy-MM-dd HH:mm"),
-                    description = a.Description,
-                    status = a.Status
-                })
-                .ToListAsync();
+                    return Json(new { draw = Request.Form["draw"].FirstOrDefault(), error = "User not authenticated" });
+                }
 
-            return Json(new
+                var doctor = await _context.Doctors
+                    .Include(d => d.ApplicationUser)
+                    .FirstOrDefaultAsync(d => d.ApplicationUser.Email == jwtUser.Email);
+
+                if (doctor == null)
+                {
+                    return Json(new { draw = Request.Form["draw"].FirstOrDefault(), error = "Doctor profile not found" });
+                }
+
+                var draw = Request.Form["draw"].FirstOrDefault();
+                var start = Request.Form["start"].FirstOrDefault();
+                var length = Request.Form["length"].FirstOrDefault();
+                var status = Request.Form["status"].FirstOrDefault();
+                var searchValue = Request.Form["search[value]"].FirstOrDefault();
+
+                int pageSize = length != null ? Convert.ToInt32(length) : 10;
+                int skip = start != null ? Convert.ToInt32(start) : 0;
+
+                var query = _context.Appointments
+                    .Include(a => a.Patient)
+                        .ThenInclude(p => p.ApplicationUser)
+                    .Where(a => a.DoctorId == doctor.Id);
+
+                if (!string.IsNullOrEmpty(status))
+                {
+                    query = query.Where(a => a.Status == status);
+                }
+
+                if (!string.IsNullOrEmpty(searchValue))
+                {
+                    searchValue = searchValue.ToLower();
+                    query = query.Where(a =>
+                        a.Patient.ApplicationUser.FullName.ToLower().Contains(searchValue) ||
+                        a.Description.ToLower().Contains(searchValue) ||
+                        a.Status.ToLower().Contains(searchValue) ||
+                        a.AppointmentDate.ToString().ToLower().Contains(searchValue));
+                }
+
+                var totalRecords = await query.CountAsync();
+
+                var appointments = await query
+                    .OrderByDescending(a => a.AppointmentDate)
+                    .Skip(skip)
+                    .Take(pageSize)
+                    .Select(a => new
+                    {
+                        id = a.Id,
+                        patientName = a.Patient.ApplicationUser.FullName,
+                        appointmentDate = a.AppointmentDate.ToString("yyyy-MM-dd"),
+                        description = a.Description,
+                        status = a.Status
+                    })
+                    .ToListAsync();
+
+                return Json(new
+                {
+                    draw,
+                    recordsFiltered = totalRecords,
+                    recordsTotal = totalRecords,
+                    data = appointments
+                });
+            }
+            catch (Exception ex)
             {
-                draw = draw,
-                recordsFiltered = totalRecords,
-                recordsTotal = totalRecords,
-                data = appointments
-            });
+                return Json(new
+                {
+                    draw = Request.Form["draw"].FirstOrDefault(),
+                    error = "An error occurred",
+                    details = ex.Message
+                });
+            }
         }
-
 
 
         [HttpPost]
         public async Task<IActionResult> UpdateStatus(int id, string status)
         {
-            var user = await _userManager.GetUserAsync(User);
-            var doctor = await _context.Doctors.FirstOrDefaultAsync(d => d.ApplicationUserId == user.Id);
-
-            if (doctor == null)
+            try
             {
-                return Json(new { success = false, message = "Unauthorized" });
+                var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+
+                if (!jwtUser.IsAuthenticated || string.IsNullOrEmpty(jwtUser.Email))
+                {
+                    return Json(new { success = false, message = "User not authenticated" });
+                }
+
+                var doctor = await _context.Doctors
+                    .FirstOrDefaultAsync(d => d.ApplicationUser.Email == jwtUser.Email);
+
+                if (doctor == null)
+                {
+                    return Json(new { success = false, message = "Doctor profile not found" });
+                }
+
+                var appointment = await _context.Appointments
+                    .FirstOrDefaultAsync(a => a.Id == id && a.DoctorId == doctor.Id);
+
+                if (appointment == null)
+                {
+                    return Json(new { success = false, message = "Appointment not found" });
+                }
+
+                appointment.Status = status;
+                await _context.SaveChangesAsync();
+
+                return Json(new { success = true });
             }
-
-            var appointment = await _context.Appointments.FindAsync(id);
-
-            if (appointment == null || appointment.DoctorId != doctor.Id)
+            catch (Exception ex)
             {
-                return Json(new { success = false, message = "Appointment not found" });
+                return Json(new
+                {
+                    success = false,
+                    message = "An error occurred",
+                    details = ex.Message
+                });
             }
-
-            appointment.Status = status;
-            _context.Appointments.Update(appointment);
-            await _context.SaveChangesAsync();
-
-            return Json(new { success = true });
         }
 
     }

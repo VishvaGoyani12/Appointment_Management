@@ -1,10 +1,10 @@
 ﻿using Appointment_Management.Data;
+using Appointment_Management.Helper;
 using Appointment_Management.Models.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Dynamic.Core;
-
 
 namespace Appointment_Management.Controllers
 {
@@ -23,6 +23,8 @@ namespace Appointment_Management.Controllers
         [HttpPost]
         public IActionResult GetAll()
         {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+
             var draw = Request.Form["draw"].FirstOrDefault();
             int start = int.Parse(Request.Form["start"]);
             int length = int.Parse(Request.Form["length"]);
@@ -36,6 +38,7 @@ namespace Appointment_Management.Controllers
             var joinDate = Request.Form["joinDate"].ToString();
 
             var query = _context.Patients.Include(p => p.ApplicationUser).AsQueryable();
+
 
             // Search
             if (!string.IsNullOrEmpty(searchValue))
@@ -92,18 +95,20 @@ namespace Appointment_Management.Controllers
             });
         }
 
-
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
         {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+
             var patient = await _context.Patients
                 .Include(p => p.ApplicationUser)
                 .FirstOrDefaultAsync(p => p.Id == id);
+
             if (patient == null) return NotFound();
 
             var viewModel = new PatientViewModel
             {
-                Id = patient.Id, 
+                Id = patient.Id,
                 FullName = patient.ApplicationUser?.FullName ?? "",
                 Gender = patient.ApplicationUser?.Gender ?? "",
                 JoinDate = patient.JoinDate,
@@ -115,18 +120,19 @@ namespace Appointment_Management.Controllers
             return PartialView("_Create", viewModel);
         }
 
-
-
         [HttpPost]
         public async Task<IActionResult> Edit(PatientViewModel model)
         {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+
             if (ModelState.IsValid)
             {
                 var patient = await _context.Patients
                     .Include(p => p.ApplicationUser)
-                    .FirstOrDefaultAsync(p => p.ApplicationUser.FullName == model.FullName);
+                    .FirstOrDefaultAsync(p => p.Id == model.Id);
 
                 if (patient == null) return NotFound();
+
 
                 patient.Status = model.Status;
 
@@ -138,6 +144,5 @@ namespace Appointment_Management.Controllers
             ViewData["IsAdminEdit"] = true;
             return PartialView("_Create", model);
         }
-
     }
 }

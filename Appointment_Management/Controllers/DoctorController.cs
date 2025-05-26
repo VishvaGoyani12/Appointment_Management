@@ -1,6 +1,9 @@
 ﻿using Appointment_Management.Data;
+using Appointment_Management.Helper;
+using Appointment_Management.Helper;
 using Appointment_Management.Models;
 using Appointment_Management.Models.ViewModels;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -27,22 +30,100 @@ namespace Appointment_Management.Controllers
 
         public IActionResult Index()
         {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
             return View();
+        }
+
+        [HttpPost]
+        public IActionResult GetAll()
+        {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+
+            var draw = HttpContext.Request.Form["draw"].FirstOrDefault();
+            var start = Request.Form["start"].FirstOrDefault();
+            var length = Request.Form["length"].FirstOrDefault();
+            var sortColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
+            var sortColumn = Request.Form[$"columns[{sortColumnIndex}][data]"].FirstOrDefault();
+            var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault();
+            var searchValue = Request.Form["search[value]"].FirstOrDefault();
+
+            var gender = Request.Form["gender"].FirstOrDefault();
+            var status = Request.Form["status"].FirstOrDefault();
+            var specialistIn = Request.Form["specialistIn"].FirstOrDefault();
+
+            int pageSize = length != null ? Convert.ToInt32(length) : 0;
+            int skip = start != null ? Convert.ToInt32(start) : 0;
+
+            var query = _context.Doctors.Include(d => d.ApplicationUser).AsQueryable();
+
+            if (!string.IsNullOrEmpty(gender))
+                query = query.Where(d => d.ApplicationUser.Gender == gender);
+
+            if (!string.IsNullOrEmpty(status) && bool.TryParse(status, out var boolStatus))
+                query = query.Where(d => d.Status == boolStatus);
+
+            if (!string.IsNullOrEmpty(specialistIn))
+                query = query.Where(d => d.SpecialistIn == specialistIn);
+
+            if (!string.IsNullOrEmpty(searchValue))
+            {
+                query = query.Where(d =>
+                    d.ApplicationUser.FullName.Contains(searchValue) ||
+                    d.ApplicationUser.Gender.Contains(searchValue) ||
+                    d.SpecialistIn.Contains(searchValue));
+            }
+
+            var total = query.Count();
+
+            var sortColumnMap = new Dictionary<string, string>
+            {
+                ["fullName"] = "ApplicationUser.FullName",
+                ["gender"] = "ApplicationUser.Gender",
+                ["specialistIn"] = "SpecialistIn",
+                ["status"] = "Status"
+            };
+
+            if (!string.IsNullOrEmpty(sortColumn) && !string.IsNullOrEmpty(sortDirection))
+            {
+                if (sortColumnMap.TryGetValue(sortColumn, out var mappedColumn))
+                {
+                    query = query.OrderBy($"{mappedColumn} {sortDirection}");
+                }
+            }
+
+            var data = query.Skip(skip).Take(pageSize).Select(d => new
+            {
+                id = d.ApplicationUserId,
+                fullName = d.ApplicationUser.FullName,
+                gender = d.ApplicationUser.Gender,
+                specialistIn = d.SpecialistIn,
+                status = d.Status ? "Active" : "Deactive"
+            }).ToList();
+
+            return Json(new
+            {
+                draw,
+                recordsTotal = total,
+                recordsFiltered = total,
+                data
+            });
         }
 
         [HttpGet]
         public IActionResult Create()
         {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
             return PartialView("_Create", new DoctorViewModel());
         }
 
         [HttpPost]
         public async Task<IActionResult> Create(DoctorViewModel model)
         {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+
             if (!ModelState.IsValid)
                 return PartialView("_Create", model);
 
-            // Check if email already exists
             var existingUser = await _userManager.FindByEmailAsync(model.Email);
             if (existingUser != null)
             {
@@ -84,10 +165,11 @@ namespace Appointment_Management.Controllers
             return Json(new { success = true });
         }
 
-
         [HttpGet]
         public async Task<IActionResult> Edit(string id)
         {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+
             var doctor = await _context.Doctors
                 .Include(d => d.ApplicationUser)
                 .FirstOrDefaultAsync(d => d.ApplicationUserId == id);
@@ -111,6 +193,8 @@ namespace Appointment_Management.Controllers
         [HttpPost]
         public async Task<IActionResult> Edit(DoctorViewModel model)
         {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+
             if (!string.IsNullOrEmpty(model.ApplicationUserId))
             {
                 ModelState.Remove(nameof(model.Password));
@@ -169,87 +253,11 @@ namespace Appointment_Management.Controllers
             return Json(new { success = true });
         }
 
-
-
-
-
-        [HttpPost]
-        public IActionResult GetAll()
-        {
-            var draw = HttpContext.Request.Form["draw"].FirstOrDefault();
-            var start = Request.Form["start"].FirstOrDefault();
-            var length = Request.Form["length"].FirstOrDefault();
-            var sortColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
-            var sortColumn = Request.Form[$"columns[{sortColumnIndex}][data]"].FirstOrDefault();
-            var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault();
-            var searchValue = Request.Form["search[value]"].FirstOrDefault();
-
-            var gender = Request.Form["gender"].FirstOrDefault();
-            var status = Request.Form["status"].FirstOrDefault();
-            var specialistIn = Request.Form["specialistIn"].FirstOrDefault();
-
-            int pageSize = length != null ? Convert.ToInt32(length) : 0;
-            int skip = start != null ? Convert.ToInt32(start) : 0;
-
-            var query = _context.Doctors.Include(d => d.ApplicationUser).AsQueryable();
-
-            if (!string.IsNullOrEmpty(gender))
-                query = query.Where(d => d.ApplicationUser.Gender == gender);
-
-            if (!string.IsNullOrEmpty(status) && bool.TryParse(status, out var boolStatus))
-                query = query.Where(d => d.Status == boolStatus);
-
-            if (!string.IsNullOrEmpty(specialistIn))
-                query = query.Where(d => d.SpecialistIn == specialistIn);
-
-            // Search 
-            if (!string.IsNullOrEmpty(searchValue))
-            {
-                query = query.Where(d =>
-                    d.ApplicationUser.FullName.Contains(searchValue) ||
-                    d.ApplicationUser.Gender.Contains(searchValue) ||
-                    d.SpecialistIn.Contains(searchValue));
-            }
-
-            var total = query.Count();
-
-            var sortColumnMap = new Dictionary<string, string>
-            {
-                ["fullName"] = "ApplicationUser.FullName",
-                ["gender"] = "ApplicationUser.Gender",
-                ["specialistIn"] = "SpecialistIn",
-                ["status"] = "Status"
-            };
-
-            if (!string.IsNullOrEmpty(sortColumn) && !string.IsNullOrEmpty(sortDirection))
-            {
-                if (sortColumnMap.TryGetValue(sortColumn, out var mappedColumn))
-                {
-                    query = query.OrderBy($"{mappedColumn} {sortDirection}");
-                }
-            }
-
-            var data = query.Skip(skip).Take(pageSize).Select(d => new
-            {
-                id = d.ApplicationUserId,
-                fullName = d.ApplicationUser.FullName,
-                gender = d.ApplicationUser.Gender,
-                specialistIn = d.SpecialistIn,
-                status = d.Status ? "Active" : "Deactive"
-            }).ToList();
-
-            return Json(new
-            {
-                draw,
-                recordsTotal = total,
-                recordsFiltered = total,
-                data
-            });
-        }
-
         [HttpGet]
         public IActionResult GetSpecialistList()
         {
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+
             var specialistList = _context.Doctors
                 .Where(d => !string.IsNullOrEmpty(d.SpecialistIn))
                 .Select(d => d.SpecialistIn)
@@ -259,34 +267,36 @@ namespace Appointment_Management.Controllers
             return Json(specialistList);
         }
 
-
         [HttpPost]
         public async Task<IActionResult> Delete(string id)
         {
-            var doctor = await _context.Doctors
-                .Include(d => d.ApplicationUser)
-                .FirstOrDefaultAsync(d => d.ApplicationUserId == id);
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
 
-            if (doctor == null)
-                return Json(new { success = false, message = "Doctor not found." });
-
-            bool hasAppointments = await _context.Appointments.AnyAsync(a => a.DoctorId == doctor.Id);
-            if (hasAppointments)
+            try
             {
-                return Json(new { success = false, message = "Doctor cannot be deleted because they have appointments booked." });
-            }
+                var doctor = await _context.Doctors
+                    .Include(d => d.ApplicationUser)
+                    .FirstOrDefaultAsync(d => d.ApplicationUserId == id);
 
-            var user = await _userManager.FindByIdAsync(id);
-            if (user != null)
+                if (doctor == null)
+                    return NotFound(new { success = false, message = "Doctor not found." });
+
+                if (await _context.Appointments.AnyAsync(a => a.DoctorId == doctor.Id))
+                    return BadRequest(new { success = false, message = "Cannot delete doctor with existing appointments." });
+
+                _context.Doctors.Remove(doctor);
+                await _context.SaveChangesAsync();
+
+                var result = await _userManager.DeleteAsync(doctor.ApplicationUser);
+                if (!result.Succeeded)
+                    return BadRequest(new { success = false, message = string.Join(", ", result.Errors.Select(e => e.Description)) });
+
+                return Ok(new { success = true, message = "Doctor deleted successfully." });
+            }
+            catch (Exception ex)
             {
-                await _userManager.DeleteAsync(user);
+                return Ok(new { success = false, message = "Error deleting doctor.", details = ex.Message });
             }
-
-            _context.Doctors.Remove(doctor);
-            await _context.SaveChangesAsync();
-
-            return Json(new { success = true });
         }
-
     }
 }

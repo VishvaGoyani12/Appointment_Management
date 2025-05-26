@@ -1,4 +1,5 @@
 ﻿using Appointment_Management.Data;
+using Appointment_Management.Helper;
 using Appointment_Management.Models;
 using Appointment_Management.Models.ViewModels;
 using Microsoft.AspNetCore.Authorization;
@@ -7,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Dynamic.Core;
-using System.Linq.Dynamic.Core.Exceptions;
+using System.Security.Claims;
 
 namespace Appointment_Management.Controllers
 {
@@ -17,7 +18,8 @@ namespace Appointment_Management.Controllers
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
 
-        public AppointmentController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        public AppointmentController(ApplicationDbContext context,
+            UserManager<ApplicationUser> userManager)
         {
             _context = context;
             _userManager = userManager;
@@ -25,100 +27,119 @@ namespace Appointment_Management.Controllers
 
         public async Task<IActionResult> Index()
         {
-            var user = await _userManager.GetUserAsync(User);
-            var patient = await _context.Patients
-                .Include(p => p.ApplicationUser)
-                .FirstOrDefaultAsync(p => p.ApplicationUserId == user.Id);
+            try
+            {
+                var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+                if (!jwtUser.IsAuthenticated || string.IsNullOrEmpty(jwtUser.Email))
+                    return RedirectToAction("Login", "Account");
 
-            ViewBag.PatientName = patient?.ApplicationUser?.FullName ?? "Unknown";
-            return View();
+                var patient = await _context.Patients
+                    .Include(p => p.ApplicationUser)
+                    .FirstOrDefaultAsync(p => p.ApplicationUser.Email == jwtUser.Email);
+
+                ViewBag.PatientName = patient?.ApplicationUser?.FullName ?? "Patient";
+                return View();
+            }
+            catch
+            {
+                ViewBag.PatientName = "Patient";
+                return View();
+            }
         }
 
         [HttpPost]
         public async Task<IActionResult> GetAll()
         {
-            var user = await _userManager.GetUserAsync(User);
-            var patient = await _context.Patients.FirstOrDefaultAsync(p => p.ApplicationUserId == user.Id);
-            if (patient == null)
+            try
             {
-                return Json(new { data = Enumerable.Empty<object>(), draw = 0, recordsTotal = 0, recordsFiltered = 0 });
-            }
-
-            var draw = Request.Form["draw"].FirstOrDefault();
-            var start = Request.Form["start"].FirstOrDefault();
-            var length = Request.Form["length"].FirstOrDefault();
-            var sortColumnIndex = Convert.ToInt32(Request.Form["order[0][column]"]);
-            var sortColumn = Request.Form[$"columns[{sortColumnIndex}][data]"];
-            var sortDir = Request.Form["order[0][dir]"];
-            var searchValue = Request.Form["search[value]"].FirstOrDefault();
-            var status = Request.Form["status"].FirstOrDefault();
-
-            int pageSize = length != null ? Convert.ToInt32(length) : 10;
-            int skip = start != null ? Convert.ToInt32(start) : 0;
-
-            var dataQuery = _context.Appointments
-                .Include(a => a.Patient).ThenInclude(p => p.ApplicationUser)
-                .Include(a => a.Doctor).ThenInclude(d => d.ApplicationUser)
-                .Where(a => a.PatientId == patient.Id)
-                .Select(a => new
+                var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+                if (!jwtUser.IsAuthenticated || string.IsNullOrEmpty(jwtUser.Email))
                 {
-                    a.Id,
-                    PatientName = a.Patient.ApplicationUser.FullName,
-                    DoctorName = a.Doctor.ApplicationUser.FullName,
-                    a.AppointmentDate,
-                    a.Description,
-                    a.Status
+                    return Json(new
+                    {
+                        draw = Request.Form["draw"].FirstOrDefault(),
+                        error = "User not authenticated"
+                    });
+                }
+
+                var patient = await _context.Patients
+                    .FirstOrDefaultAsync(p => p.ApplicationUser.Email == jwtUser.Email);
+
+                if (patient == null)
+                {
+                    return Json(new
+                    {
+                        draw = Request.Form["draw"].FirstOrDefault(),
+                        error = "Patient profile not found"
+                    });
+                }
+
+                var draw = Request.Form["draw"].FirstOrDefault();
+                var start = Request.Form["start"].FirstOrDefault();
+                var length = Request.Form["length"].FirstOrDefault();
+                var searchValue = Request.Form["search[value]"].FirstOrDefault();
+                var status = Request.Form["status"].FirstOrDefault();
+
+                int pageSize = length != null ? Convert.ToInt32(length) : 10;
+                int skip = start != null ? Convert.ToInt32(start) : 0;
+
+                var query = _context.Appointments
+                    .Include(a => a.Patient)
+                        .ThenInclude(p => p.ApplicationUser)
+                    .Include(a => a.Doctor)
+                        .ThenInclude(d => d.ApplicationUser)
+                    .Where(a => a.PatientId == patient.Id);
+
+                if (!string.IsNullOrEmpty(status))
+                {
+                    query = query.Where(a => a.Status == status);
+                }
+
+                if (!string.IsNullOrEmpty(searchValue))
+                {
+                    searchValue = searchValue.ToLower();
+                    query = query.Where(a =>
+                        a.Patient.ApplicationUser.FullName.ToLower().Contains(searchValue) ||
+                        a.Doctor.ApplicationUser.FullName.ToLower().Contains(searchValue) ||
+                        a.Description.ToLower().Contains(searchValue) ||
+                        a.Status.ToLower().Contains(searchValue) ||
+                        a.AppointmentDate.ToString().ToLower().Contains(searchValue));
+                }
+
+                var totalRecords = await query.CountAsync();
+
+                var appointments = await query
+                    .OrderByDescending(a => a.AppointmentDate)
+                    .Skip(skip)
+                    .Take(pageSize)
+                    .Select(a => new
+                    {
+                        id = a.Id,
+                        patientName = a.Patient.ApplicationUser.FullName,
+                        doctorName = a.Doctor.ApplicationUser.FullName,
+                        appointmentDate = a.AppointmentDate.ToString("yyyy-MM-dd"),
+                        description = a.Description,
+                        status = a.Status
+                    })
+                    .ToListAsync();
+
+                return Json(new
+                {
+                    draw,
+                    recordsFiltered = totalRecords,
+                    recordsTotal = totalRecords,
+                    data = appointments
                 });
-
-            if (!string.IsNullOrEmpty(status))
-                dataQuery = dataQuery.Where(a => a.Status == status);
-
-            if (!string.IsNullOrEmpty(searchValue))
-            {
-                string lowerSearchValue = searchValue.ToLower();
-                dataQuery = dataQuery.Where(a =>
-                    a.PatientName.ToLower().Contains(lowerSearchValue) ||
-                    a.DoctorName.ToLower().Contains(lowerSearchValue) ||
-                    a.Description.ToLower().Contains(lowerSearchValue) ||
-                    a.Status.ToLower().Contains(lowerSearchValue));
             }
-
-
-            int recordsTotal = await dataQuery.CountAsync();
-
-            if (!string.IsNullOrEmpty(sortColumn) && !string.IsNullOrEmpty(sortDir))
+            catch (Exception ex)
             {
-                try
+                return Json(new
                 {
-                    dataQuery = dataQuery.OrderBy($"{sortColumn} {sortDir}");
-                }
-                catch
-                {
-                    dataQuery = dataQuery.OrderBy("AppointmentDate desc");
-                }
+                    draw = Request.Form["draw"].FirstOrDefault(),
+                    error = "An error occurred",
+                    details = ex.Message
+                });
             }
-
-            var data = await dataQuery
-                .Skip(skip)
-                .Take(pageSize)
-                .Select(a => new
-                {
-                    a.Id,
-                    a.PatientName,
-                    a.DoctorName,
-                    AppointmentDate = a.AppointmentDate.ToString("yyyy-MM-dd"),
-                    a.Description,
-                    a.Status
-                })
-                .ToListAsync();
-
-            return Json(new
-            {
-                draw,
-                recordsFiltered = recordsTotal,
-                recordsTotal,
-                data
-            });
         }
 
         [HttpGet]
@@ -135,10 +156,23 @@ namespace Appointment_Management.Controllers
         [HttpPost]
         public async Task<IActionResult> Create(AppointmentViewModel vm)
         {
-            var user = await _userManager.GetUserAsync(User);
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+            if (!jwtUser.IsAuthenticated || string.IsNullOrEmpty(jwtUser.Email))
+            {
+                return Json(new { success = false, message = "User not authenticated." });
+            }
+
+            var user = await _userManager.FindByEmailAsync(jwtUser.Email);
+            if (user == null)
+            {
+                return Json(new { success = false, message = "User not found." });
+            }
+
             var patient = await _context.Patients.FirstOrDefaultAsync(p => p.ApplicationUserId == user.Id);
             if (patient == null)
+            {
                 return Json(new { success = false, message = "Patient profile not found." });
+            }
 
             if (ModelState.IsValid)
             {
@@ -217,15 +251,12 @@ namespace Appointment_Management.Controllers
 
                 _context.Appointments.Add(appointment);
                 await _context.SaveChangesAsync();
-                return Json(new { success = true });
+                return Json(new { success = true, message = "Appointment created successfully." });
             }
 
             PopulateDoctorDropdown(vm.AppointmentDate);
             return PartialView("_Create", vm);
         }
-
-
-
 
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
@@ -233,8 +264,16 @@ namespace Appointment_Management.Controllers
             var appointment = await _context.Appointments.FindAsync(id);
             if (appointment == null) return NotFound();
 
-            var user = await _userManager.GetUserAsync(User);
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+            if (!jwtUser.IsAuthenticated || string.IsNullOrEmpty(jwtUser.Email))
+                return Unauthorized();
+
+            var user = await _userManager.FindByEmailAsync(jwtUser.Email);
+            if (user == null) return Unauthorized();
+
             var patient = await _context.Patients.FirstOrDefaultAsync(p => p.ApplicationUserId == user.Id);
+            if (patient == null) return Unauthorized();
+
             if (appointment.PatientId != patient.Id) return Unauthorized();
 
             var vm = new AppointmentViewModel
@@ -253,56 +292,74 @@ namespace Appointment_Management.Controllers
         [HttpPost]
         public async Task<IActionResult> Edit(AppointmentViewModel vm)
         {
-            var user = await _userManager.GetUserAsync(User);
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+            if (!jwtUser.IsAuthenticated || string.IsNullOrEmpty(jwtUser.Email))
+                return Unauthorized();
+
+            var user = await _userManager.FindByEmailAsync(jwtUser.Email);
+            if (user == null) return Unauthorized();
+
             var patient = await _context.Patients.FirstOrDefaultAsync(p => p.ApplicationUserId == user.Id);
             if (patient == null) return Unauthorized();
 
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                bool isDuplicate = await _context.Appointments.AnyAsync(a =>
-                    a.Id != vm.Id &&
-                    a.DoctorId == vm.DoctorId &&
-                    a.PatientId == patient.Id &&
-                    a.AppointmentDate.Date == vm.AppointmentDate.Date);
-
-                if (isDuplicate)
-                {
-                    ModelState.AddModelError("AppointmentDate", "This appointment already exists for the selected doctor on the same date.");
-                }
-                else
-                {
-                    var appointment = await _context.Appointments.FindAsync(vm.Id);
-                    if (appointment == null) return NotFound();
-                    if (appointment.PatientId != patient.Id) return Unauthorized();
-
-                    appointment.DoctorId = vm.DoctorId;
-                    appointment.AppointmentDate = vm.AppointmentDate;
-                    appointment.Description = vm.Description;
-                    appointment.Status = vm.Status;
-
-                    _context.Appointments.Update(appointment);
-                    await _context.SaveChangesAsync();
-                    return Json(new { success = true });
-                }
+                PopulateDoctorDropdown(vm.AppointmentDate, vm.DoctorId);
+                return PartialView("_Create", vm);
             }
 
-            PopulateDoctorDropdown();
-            return PartialView("_Create", vm);
+            bool isDuplicate = await _context.Appointments.AnyAsync(a =>
+                a.Id != vm.Id &&
+                a.DoctorId == vm.DoctorId &&
+                a.PatientId == patient.Id &&
+                a.AppointmentDate.Date == vm.AppointmentDate.Date);
+
+            if (isDuplicate)
+            {
+                ModelState.AddModelError("AppointmentDate", "This appointment already exists.");
+                PopulateDoctorDropdown(vm.AppointmentDate, vm.DoctorId);
+                return PartialView("_Create", vm);
+            }
+
+            var appointment = await _context.Appointments.FindAsync(vm.Id);
+            if (appointment == null) return NotFound();
+
+            if (appointment.PatientId != patient.Id) return Unauthorized();
+
+            appointment.DoctorId = vm.DoctorId;
+            appointment.AppointmentDate = vm.AppointmentDate;
+            appointment.Description = vm.Description;
+            appointment.Status = vm.Status;
+
+            await _context.SaveChangesAsync();
+            return Json(new { success = true, message = "Appointment Updated successfully." });
         }
 
         [HttpPost]
         public async Task<IActionResult> Delete(int id)
         {
-            var user = await _userManager.GetUserAsync(User);
+            var jwtUser = JwtHelper.GetJwtUser(HttpContext);
+            if (!jwtUser.IsAuthenticated || string.IsNullOrEmpty(jwtUser.Email))
+                return Json(new { success = false, message = "User not authenticated." });
+
+            var user = await _userManager.FindByEmailAsync(jwtUser.Email);
+            if (user == null)
+                return Json(new { success = false, message = "User not found." });
+
             var patient = await _context.Patients.FirstOrDefaultAsync(p => p.ApplicationUserId == user.Id);
+            if (patient == null)
+                return Json(new { success = false, message = "Patient profile not found." });
 
             var appointment = await _context.Appointments.FindAsync(id);
-            if (appointment == null || appointment.PatientId != patient.Id)
-                return Json(new { success = false });
+            if (appointment == null)
+                return Json(new { success = false, message = "Appointment not found." });
+
+            if (appointment.PatientId != patient.Id)
+                return Json(new { success = false, message = "Unauthorized to delete this appointment." });
 
             _context.Appointments.Remove(appointment);
             await _context.SaveChangesAsync();
-            return Json(new { success = true });
+            return Json(new { success = true, message = "Appoinment Deleted Successfully" });
         }
 
         private void PopulateDoctorDropdown(DateTime? selectedDate = null, int? selectedDoctorId = null)
@@ -324,6 +381,5 @@ namespace Appointment_Management.Controllers
                 })
                 .ToList();
         }
-
     }
 }

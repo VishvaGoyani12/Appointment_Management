@@ -6,6 +6,7 @@ $("#divModal").on("hidden.bs.modal", function () {
     $("body").append(myClone);
 });
 
+// Include auth.js first in your HTML
 $(document).ready(function () {
     loadSpecialistFilter();
     loadData();
@@ -15,9 +16,11 @@ $(document).ready(function () {
     });
 
     $('#filterGender, #filterStatus, #filterSpecialistIn').change(function () {
-        $('#doctorTable').DataTable().ajax.reload();
+        var table = $('#doctorTable').DataTable();
+        table.ajax.reload();
     });
 });
+
 
 function openDoctorModal(url) {
     $("#modalContent").load(url, function (response, status, xhr) {
@@ -94,24 +97,37 @@ function editDoctor(id) {
 }
 
 function deleteDoctor(id) {
-    if (confirm("Are you sure you want to delete this doctor?")) {
-        $.post("/Doctor/Delete", { id: id }, function (response) {
+    if (!confirm("Are you sure you want to delete this doctor?")) return;
+
+    $.ajax({
+        url: '/Doctor/Delete',
+        type: 'POST',
+        data: { id: id },
+        success: function (response) {
             if (response.success) {
-                toastr.success("Doctor deleted successfully.");
+                toastr.success(response.message);
                 $('#doctorTable').DataTable().ajax.reload();
             } else {
-                toastr.error(response.message || "An error occurred while deleting the doctor.");
+                toastr.error(response.message);
             }
-        });
-    }
+        },
+        error: function (xhr) {
+            let msg = "An error occurred while deleting the doctor.";
+            if (xhr.responseJSON && xhr.responseJSON.message) {
+                msg = xhr.responseJSON.message;
+            }
+            toastr.error(msg);
+        }
+    });
 }
 
 
+
 function loadData() {
-    $('#doctorTable').DataTable({
+    var table = $('#doctorTable').DataTable({
         processing: true,
         serverSide: true,
-        destroy: true,
+        destroy: true, 
         ajax: {
             url: '/Doctor/GetAll',
             type: 'POST',
@@ -119,6 +135,13 @@ function loadData() {
                 d.gender = $('#filterGender').val();
                 d.status = $('#filterStatus').val();
                 d.specialistIn = $('#filterSpecialistIn').val();
+            },
+            error: function (xhr, error, thrown) {
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    toastr.error(xhr.responseJSON.error);
+                } else {
+                    toastr.error("Error loading doctor data");
+                }
             }
         },
         columns: [
@@ -127,14 +150,18 @@ function loadData() {
             { data: 'specialistIn', title: 'Specialist In' },
             { data: 'status', title: 'Status' },
             {
-                data: 'id', title: 'Actions',
+                data: 'id',
+                title: 'Actions',
+                orderable: false,
                 render: function (data) {
                     return `
-        <button onclick="editDoctor('${data}')" class="btn btn-sm btn-warning">Edit</button>
-        <button onclick="deleteDoctor('${data}')" class="btn btn-sm btn-danger">Delete</button>`;
+                        <button onclick="editDoctor('${data}')" class="btn btn-sm btn-warning">Edit</button>
+                        <button onclick="deleteDoctor('${data}')" class="btn btn-sm btn-danger">Delete</button>
+                    `;
                 }
-
             }
         ]
     });
+
+    return table;
 }

@@ -37,30 +37,32 @@ $(document).on('submit', '#formCreateOrEdit', function (e) {
     e.preventDefault();
 
     var form = $(this);
-    var token = form.find('input[name="__RequestVerificationToken"]').val();
-    var appointmentId = form.find('input[name="Id"]').val();
-    var isEdit = appointmentId && !isNaN(parseInt(appointmentId)) && parseInt(appointmentId) > 0;
+    var url = form.attr('action');
+    var formData = form.serialize();
 
     $.ajax({
-        url: isEdit ? '/Appointment/Edit' : '/Appointment/Create',
-        type: 'POST',
-        data: form.serialize(),
-        headers: {
-            'RequestVerificationToken': token
-        },
-        success: function (res) {
-            if (res.success) {
+        type: "POST",
+        url: url,
+        data: formData,
+        success: function (response) {
+            if (response.success) {
                 closeModal();
-                loadData();
+                showToast('success', response.message || 'Operation successful');
+                $('#appointmentTable').DataTable().ajax.reload(null, false);
             } else {
-                $('#modalContent').html(res);
+                if (typeof response === 'string') {
+                    $('#modalContent').html(response);
+                } else {
+                    showToast('error', response.message || 'An error occurred');
+                }
             }
         },
-        error: function (xhr) {
-            console.error("Error during save:", xhr.responseText);
+        error: function () {
+            showToast('error', 'An unexpected error occurred.');
         }
     });
 });
+
 
 function loadData() {
     $('#appointmentTable').DataTable({

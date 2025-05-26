@@ -3,19 +3,26 @@
     $('#filterStatus').change(function () {
         $('#doctorAppointmentsTable').DataTable().ajax.reload();
     });
-
 });
 
 function loadDoctorAppointments() {
     $('#doctorAppointmentsTable').DataTable({
         processing: true,
         serverSide: true,
-        destroy: true,
         ajax: {
             url: '/DoctorAppointment/GetMyAppointments',
             type: 'POST',
             data: function (d) {
-                d.status = $('#filterStatus').val(); 
+                d.status = $('#filterStatus').val();
+                // Add other filters if needed
+            },
+            error: function (xhr, error, thrown) {
+                console.error('Ajax error:', xhr.responseText);
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    showStatusMessage(xhr.responseJSON.error, 'danger');
+                } else {
+                    showStatusMessage('Error loading appointments', 'danger');
+                }
             }
         },
         columns: [
