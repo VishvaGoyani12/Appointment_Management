@@ -68,7 +68,7 @@ namespace Appointment_Management.Controllers
                         Status = true
                     };
 
-                    _context.Patients.Add(patient); 
+                    _context.Patients.Add(patient);
                     await _context.SaveChangesAsync();
 
                     var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
@@ -84,7 +84,22 @@ namespace Appointment_Management.Controllers
                     return View("RegistrationConfirmation");
                 }
 
-                foreach (var error in result.Errors)
+                var passwordErrors = result.Errors
+                    .Where(e => e.Code.Contains("Password"))
+                    .Select(e => e.Description)
+                    .ToList();
+
+                foreach (var key in ModelState.Keys.Where(k => k.Contains("Password")).ToList())
+                {
+                    ModelState[key].Errors.Clear();
+                }
+
+                foreach (var err in passwordErrors)
+                {
+                    ModelState.AddModelError(string.Empty, err);
+                }
+
+                foreach (var error in result.Errors.Where(e => !e.Code.Contains("Password")))
                 {
                     ModelState.AddModelError(string.Empty, error.Description);
                 }
@@ -92,6 +107,7 @@ namespace Appointment_Management.Controllers
 
             return View(model);
         }
+
 
 
 
@@ -124,7 +140,7 @@ namespace Appointment_Management.Controllers
     new Claim(JwtRegisteredClaimNames.Sub, user.Email),
     new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
     new Claim(ClaimTypes.NameIdentifier, user.Id),
-    new Claim(ClaimTypes.Email, user.Email), // Add this line
+    new Claim(ClaimTypes.Email, user.Email), 
     new Claim(ClaimTypes.Name, user.UserName)
 };
 
